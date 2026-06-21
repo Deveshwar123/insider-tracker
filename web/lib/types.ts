@@ -69,4 +69,5 @@ export interface FilingSummary {
   shares: number | null;
   price: number | null;
   value: number | null; // shares × price for the representative transaction
+  sharesOwnedAfter: number | null; // holdings reported right after this filing
 }

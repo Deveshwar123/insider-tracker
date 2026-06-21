@@ -49,5 +49,6 @@ export function summarize(f: FilingDetail): FilingSummary {
     shares,
     price,
     value,
+    sharesOwnedAfter: t?.shares_owned_after ?? null,
   };
 }

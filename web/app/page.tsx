@@ -2,8 +2,11 @@ import { Suspense } from "react";
 import SearchBar from "./components/SearchBar";
 import FilingsExplorer from "./components/FilingsExplorer";
 import RefreshButton from "./components/RefreshButton";
+import StatCards from "./components/StatCards";
+import ClusterBuys from "./components/ClusterBuys";
 import { getLatestFilings, searchFilings } from "@/lib/queries";
 import { summarize } from "@/lib/summary";
+import { computeStats, computeClusterBuys } from "@/lib/stats";
 
 // Always render fresh data (the worker updates the DB out of band).
 export const dynamic = "force-dynamic";
@@ -14,8 +17,10 @@ export default async function HomePage({
   searchParams: { q?: string };
 }) {
   const q = searchParams.q?.trim() ?? "";
-  const filings = q ? await searchFilings(q) : await getLatestFilings(300);
+  const filings = q ? await searchFilings(q) : await getLatestFilings(500);
   const summaries = filings.map(summarize);
+  const stats = computeStats(summaries);
+  const clusters = q ? [] : computeClusterBuys(summaries);
 
   return (
     <>
@@ -30,6 +35,10 @@ export default async function HomePage({
         </div>
         <RefreshButton />
       </div>
+
+      <StatCards stats={stats} />
+
+      {!q && <ClusterBuys clusters={clusters} />}
 
       <Suspense>
         <SearchBar />

@@ -20,6 +20,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="container">{children}</main>
+        <footer className="site-footer">
+          <div className="inner">
+            <span>
+              Data from{" "}
+              <a href="https://www.sec.gov/cgi-bin/browse-edgar" target="_blank" rel="noopener noreferrer">
+                SEC EDGAR
+              </a>{" "}
+              · prices delayed via Yahoo Finance
+            </span>
+            <span className="disclaimer">For research only — not investment advice.</span>
+          </div>
+        </footer>
       </body>
     </html>
   );
