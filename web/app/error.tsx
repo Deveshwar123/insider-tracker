@@ -2,10 +2,14 @@
 
 // Route-level error boundary: recover gracefully if a server fetch fails
 // (Supabase/EDGAR hiccup) instead of showing a blank crash.
+import { AlertTriangle } from "./components/icons";
+
 export default function Error({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="error-state">
-      <div className="error-icon">⚠</div>
+      <div className="error-icon">
+        <AlertTriangle size={32} />
+      </div>
       <h2>Couldn’t load filings</h2>
       <p className="muted">{error.message || "Something went wrong fetching data."}</p>
       <button className="refresh-retry" onClick={reset}>

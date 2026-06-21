@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { FilingSummary } from "@/lib/types";
 import { fmtCompactNumber, fmtDate, fmtMoney, fmtNumber, timeAgo } from "@/lib/format";
+import { Download, Flame } from "./icons";
 
 type Side = "all" | "buys" | "sells";
 type SortCol = "date" | "shares" | "price" | "value";
@@ -72,6 +73,18 @@ export default function FilingsExplorer({ filings }: { filings: FilingSummary[] 
     return { all: filings.length, buys, sells };
   }, [filings]);
 
+  // Insider+issuer pairs that have an open-market BUY (code P) in the loaded
+  // window. Used to flag a sell as a "round-trip" — selling shares they bought.
+  const openBuyKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const f of filings) {
+      if (f.isPurchase && f.insiderCik != null && f.companyCik != null) {
+        s.add(`${f.insiderCik}|${f.companyCik}`);
+      }
+    }
+    return s;
+  }, [filings]);
+
   // Current prices, loaded progressively from /api/quotes (delayed Yahoo data).
   // undefined = not fetched yet, null = no quote available.
   const [quotes, setQuotes] = useState<Record<string, number | null>>({});
@@ -120,6 +133,25 @@ export default function FilingsExplorer({ filings }: { filings: FilingSummary[] 
     );
   }
 
+  function sellMeta(f: FilingSummary) {
+    const key =
+      f.insiderCik != null && f.companyCik != null ? `${f.insiderCik}|${f.companyCik}` : null;
+    const roundTrip = key ? openBuyKeys.has(key) : false;
+    const before = (f.sharesOwnedAfter ?? 0) + (f.shares ?? 0);
+    let title: string;
+    if (roundTrip) {
+      title =
+        "Round-trip: this insider also bought this stock on the open market in this window — they're selling shares they bought.";
+    } else if (f.sharesOwnedAfter != null) {
+      title = `Covered sale — selling previously held shares (held ~${fmtNumber(
+        before
+      )} before, ${fmtNumber(f.sharesOwnedAfter)} after). Insiders can't legally short their own stock (SEC §16(c)).`;
+    } else {
+      title = "Sale with no reported resulting holdings on file.";
+    }
+    return { roundTrip, title };
+  }
+
   function renderStatus(f: FilingSummary) {
     const o = f.sharesOwnedAfter;
     if (o == null) return <span className="status unknown">—</span>;
@@ -150,6 +182,7 @@ export default function FilingsExplorer({ filings }: { filings: FilingSummary[] 
       "Current Price",
       "Value",
       "Position",
+      "Sell Basis",
     ];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = rows.map((f) =>
@@ -166,6 +199,15 @@ export default function FilingsExplorer({ filings }: { filings: FilingSummary[] 
         f.ticker ? quotes[f.ticker] ?? "" : "",
         f.value,
         f.sharesOwnedAfter == null ? "" : f.sharesOwnedAfter > 0 ? "Holding" : "Exited",
+        f.direction === "D"
+          ? f.insiderCik != null &&
+            f.companyCik != null &&
+            openBuyKeys.has(`${f.insiderCik}|${f.companyCik}`)
+            ? "round-trip"
+            : f.sharesOwnedAfter != null
+              ? "covered"
+              : "no-holdings"
+          : "",
       ]
         .map(esc)
         .join(",")
@@ -211,7 +253,7 @@ export default function FilingsExplorer({ filings }: { filings: FilingSummary[] 
         />
 
         <button className="ghost-btn" onClick={exportCsv} disabled={rows.length === 0}>
-          ⤓ Export CSV
+          <Download size={14} /> Export CSV
         </button>
       </div>
 
@@ -260,9 +302,20 @@ export default function FilingsExplorer({ filings }: { filings: FilingSummary[] 
                     <td className="exact-date">{fmtDate(f.filing_date)}</td>
                     <td>
                       {f.direction === "A" ? (
-                        <span className="badge-side buy">{notable ? "🔥 Buy" : "Buy"}</span>
+                        <span className="badge-side buy">
+                          {notable && <Flame size={11} className="flame-inline" />}
+                          Buy
+                        </span>
                       ) : f.direction === "D" ? (
-                        <span className="badge-side sell">Sell</span>
+                        (() => {
+                          const { roundTrip, title } = sellMeta(f);
+                          return (
+                            <span className="badge-side sell" title={title}>
+                              Sell
+                              {roundTrip && <span className="rt-tag">RT</span>}
+                            </span>
+                          );
+                        })()
                       ) : (
                         <span className="badge">—</span>
                       )}

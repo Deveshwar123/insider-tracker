@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { RefreshCw } from "./icons";
 
 export default function RefreshButton() {
   const router = useRouter();
@@ -27,7 +28,8 @@ export default function RefreshButton() {
   return (
     <div className="refresh">
       <button onClick={refresh} disabled={busy}>
-        {busy ? "Refreshing…" : "↻ Refresh from SEC EDGAR"}
+        <RefreshCw size={15} className={busy ? "spin" : undefined} />
+        {busy ? "Refreshing…" : "Refresh from SEC EDGAR"}
       </button>
       {msg && <span className="refresh-msg">{msg}</span>}
     </div>

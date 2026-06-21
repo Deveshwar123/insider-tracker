@@ -1,21 +1,26 @@
 :root {
-  --bg: #0a0d14;
-  --panel: #11151f;
-  --panel-2: #151a26;
-  --panel-hover: #1a2030;
-  --border: #232a3b;
-  --border-soft: #1c2230;
-  --fg: #e7eaf0;
-  --fg-dim: #c2c8d6;
-  --muted: #828ca1;
-  --accent: #4f8cff;
-  --accent-dim: #2b3c63;
-  --green: #2ee6a0;
-  --green-bg: rgba(46, 230, 160, 0.12);
-  --red: #ff6b6b;
-  --red-bg: rgba(255, 107, 107, 0.12);
+  /* Refined "Financial Dashboard" dark palette (slate-based, WCAG AA verified) */
+  --bg: #020617;
+  --panel: #0e1223;
+  --panel-2: #141a2e;
+  --panel-hover: #1a2138;
+  --border: #334155;
+  --border-soft: #1e293b;
+  --fg: #f8fafc;
+  --fg-dim: #cbd5e1;
+  --muted: #94a3b8; /* 7:1 on --bg — passes AA for body text */
+  --accent: #3b82f6;
+  --accent-dim: #1e3a5f;
+  --green: #22c55e;
+  --green-bg: rgba(34, 197, 94, 0.13);
+  --red: #ef4444;
+  --red-bg: rgba(239, 68, 68, 0.13);
   --radius: 10px;
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 8px 24px rgba(0, 0, 0, 0.35);
+  /* Typography (Fira Sans body + Fira Code data) via next/font */
+  --font-sans-stack: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono-stack: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 * {
@@ -29,11 +34,22 @@ body {
   background: radial-gradient(1200px 600px at 70% -200px, #131a2b 0%, var(--bg) 60%) no-repeat,
     var(--bg);
   color: var(--fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+  font-family: var(--font-sans-stack);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* tabular data → Fira Code monospaced figures (number-tabular rule) */
+.num,
+.card-value,
+.exact-date,
+.price-cell,
+.pl,
+.cluster-meta,
+.segmented .count {
+  font-family: var(--font-mono-stack);
+  font-feature-settings: "tnum" 1;
 }
 
 a {
@@ -68,13 +84,16 @@ header.site .inner {
   gap: 16px;
 }
 header.site .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 800;
   font-size: 16px;
   letter-spacing: -0.01em;
-  background: linear-gradient(90deg, #fff, #9fc0ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--fg);
+}
+header.site .brand svg {
+  color: var(--accent);
 }
 .tagline {
   color: var(--muted);
@@ -523,6 +542,19 @@ th.sortable:hover {
   color: var(--muted);
 }
 
+/* round-trip marker on sells (sold shares they bought) */
+.rt-tag {
+  margin-left: 5px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.22);
+  color: #f59e0b;
+  cursor: help;
+}
+
 /* current price + P/L */
 .price-cell {
   text-align: right;
@@ -590,7 +622,7 @@ th.sortable:hover {
 /* ---- design polish: chips, truncation, skeletons ------------------------- */
 .ticker-chip {
   display: inline-block;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-family: var(--font-mono-stack);
   font-weight: 700;
   font-size: 12px;
   letter-spacing: 0.02em;
@@ -766,4 +798,36 @@ tbody tr,
 }
 .site-footer .disclaimer {
   opacity: 0.85;
+}
+
+/* ---- icon alignment & spin ----------------------------------------------- */
+.refresh button,
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.badge-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.clusters-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.flame {
+  color: #f59e0b;
+}
+.flame-inline {
+  color: #f59e0b;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.9s linear infinite;
 }
