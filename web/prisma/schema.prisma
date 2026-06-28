@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Issuer {
+  cik        BigInt   @id
+  name       String
+  ticker     String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  filings    Filing[] @relation("IssuerFilings")
+
+  @@map("issuers")
+}
+
+model Insider {
+  cik        BigInt   @id
+  name       String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  filings    Filing[] @relation("InsiderFilings")
+
+  @@map("insiders")
+}
+
+model Filing {
+  id              BigInt    @id @default(autoincrement())
+  accessionNo     String    @unique @map("accession_no")
+  formType        String    @default("4") @map("form_type")
+  issuerCik       BigInt    @map("issuer_cik")
+  insiderCik      BigInt    @map("insider_cik")
+  filingDate      DateTime? @map("filing_date") @db.Date
+  periodOfReport  DateTime? @map("period_of_report") @db.Date
+  insiderTitle    String?   @map("insider_title")
+  isDirector      Boolean?  @map("is_director")
+  isOfficer       Boolean?  @map("is_officer")
+  isTenPct        Boolean?  @map("is_ten_pct")
+  sourceUrl       String?   @map("source_url")
+  rawXmlUrl       String?   @map("raw_xml_url")
+  ingestedAt      DateTime  @default(now()) @map("ingested_at") @db.Timestamptz
+
+  issuer          Issuer         @relation("IssuerFilings", fields: [issuerCik], references: [cik])
+  insider         Insider        @relation("InsiderFilings", fields: [insiderCik], references: [cik])
+  transactions    Transaction[]
+
+  @@index([issuerCik])
+  @@index([insiderCik])
+  @@index([filingDate])
+  @@map("filings")
+}
+
+model Transaction {
+  id               BigInt    @id @default(autoincrement())
+  filingId         BigInt    @map("filing_id")
+  securityTitle    String?   @map("security_title")
+  isDerivative     Boolean?  @map("is_derivative")
+  transactionDate  DateTime? @map("transaction_date") @db.Date
+  transactionCode  String?   @map("transaction_code")
+  shares           Decimal?  @db.Decimal
+  pricePerShare    Decimal?  @map("price_per_share") @db.Decimal
+  acquiredDisposed String?   @map("acquired_disposed") @db.Char(1)
+  sharesOwnedAfter Decimal?  @map("shares_owned_after") @db.Decimal
+  ownershipType    String?   @map("ownership_type")
+  footnoteIds      String?   @map("footnote_ids")
+  lineNo           Int?      @map("line_no")
+
+  filing           Filing @relation(fields: [filingId], references: [id], onDelete: Cascade)
+
+  @@unique([filingId, lineNo])
+  @@index([filingId])
+  @@index([transactionCode])
+  @@map("transactions")
+}
+
+model IngestionRun {
+  id          BigInt    @id @default(autoincrement())
+  startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt  DateTime? @map("finished_at") @db.Timestamptz
+  targetDate  DateTime? @map("target_date") @db.Date
+  fillingsSeen Int?     @map("filings_seen")
+  fillingsNew  Int?     @map("filings_new")
+  errors      Int?
+  status      String?
+  notes       String?
+
+  @@map("ingestion_runs")
+}
