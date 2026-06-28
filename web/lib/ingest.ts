@@ -13,7 +13,7 @@ const SEC_BASE = "https://www.sec.gov";
 const SPACING_MS = 150; // ~6-7 req/s, well under SEC's 10/s
 const MAX_RETRIES = 3;
 const BACKOFF_BASE = 600;
-const CAP = 20; // max new filings processed per refresh (time budget)
+const CAP = 50; // max new filings processed per refresh call (time budget ~60s)
 const LOOKBACK_DAYS = 5; // skip weekends/holidays to find the latest index
 
 // ---- supabase admin client (service role — server only) -------------------

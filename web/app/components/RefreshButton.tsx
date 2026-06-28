@@ -12,20 +12,26 @@ export default function RefreshButton() {
   async function refresh() {
     setBusy(true);
     setMsg("Pulling latest filings from SEC EDGAR…");
+    let totalNew = 0;
+
     try {
-      const res = await fetch("/api/refresh", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Refresh failed");
-      if (data.new > 0) {
-        setMsg(
-          data.remaining > 0
-            ? `Added ${data.new} — ${data.remaining} more pending, click again.`
-            : `Added ${data.new} new filing(s).`
-        );
-      } else {
-        setMsg("Up to date — no new filings.");
+      while (true) {
+        const res = await fetch("/api/refresh", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Refresh failed");
+
+        totalNew += data.new as number;
+        const remaining = data.remaining as number;
+
+        if (remaining > 0) {
+          setMsg(`Fetched ${totalNew} so far — ${remaining} remaining…`);
+        } else {
+          break;
+        }
       }
-      router.refresh(); // re-run the server component so new rows appear
+
+      setMsg(totalNew > 0 ? `Added ${totalNew} new filing(s).` : "Up to date — no new filings.");
+      router.refresh();
     } catch (e) {
       setMsg(`Error: ${(e as Error).message}`);
     } finally {
