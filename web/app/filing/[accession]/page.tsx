@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { ErrorState, TableSkeleton } from "@/app/components/States";
 import { getFilingByAccession } from "@/lib/queries";
+import { useAsync } from "@/lib/useAsync";
 import {
   fmtDate,
   fmtMoney,
@@ -10,22 +13,48 @@ import {
   acquiredColor,
 } from "@/lib/format";
 
-export const dynamic = "force-dynamic";
-
-export default async function FilingDetailPage({
-  params,
-}: {
-  params: { accession: string };
-}) {
+export default function FilingDetailPage({ params }: { params: { accession: string } }) {
   const accession = decodeURIComponent(params.accession);
-  const filing = await getFilingByAccession(accession);
-  if (!filing) notFound();
+
+  const { data: filing, error, loading, reload } = useAsync(
+    () => getFilingByAccession(accession),
+    [accession]
+  );
+
+  const back = (
+    <Link href="/" className="back">
+      ← Back to filings
+    </Link>
+  );
+
+  if (loading) {
+    return (
+      <>
+        {back}
+        <TableSkeleton rows={6} />
+      </>
+    );
+  }
+  if (error) {
+    return (
+      <>
+        {back}
+        <ErrorState message={error} onRetry={reload} />
+      </>
+    );
+  }
+  if (!filing) {
+    return (
+      <>
+        {back}
+        <ErrorState message={`No filing found for accession ${accession}.`} />
+      </>
+    );
+  }
 
   return (
     <>
-      <Link href="/" className="back">
-        ← Back to filings
-      </Link>
+      {back}
 
       <h1>
         {filing.issuers?.name ?? "Unknown issuer"}{" "}
@@ -102,7 +131,13 @@ export default async function FilingDetailPage({
                   <td className="num">{fmtNumber(t.shares)}</td>
                   <td className="num">{fmtMoney(t.price_per_share)}</td>
                   <td className="num">{fmtNumber(t.shares_owned_after)}</td>
-                  <td>{t.ownership_type === "I" ? "Indirect" : t.ownership_type === "D" ? "Direct" : "—"}</td>
+                  <td>
+                    {t.ownership_type === "I"
+                      ? "Indirect"
+                      : t.ownership_type === "D"
+                        ? "Direct"
+                        : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>

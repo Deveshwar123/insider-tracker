@@ -5,30 +5,13 @@
 //   npm run ingest:days 7      -> ingest the last 7 calendar days (backfill)
 //   tsx src/index.ts --days 30 -> same, explicit flag
 //
-// Loads worker/.env locally (Node 24 supports --env-file, but we parse a
-// minimal .env here so `npm run` works without extra flags).
+// worker/.env is loaded by ./env.js, which must be imported before anything
+// that reads env at module scope.
 
-import { readFileSync } from "node:fs";
+// Must come first: it populates process.env before config.js validates it.
+import "./env.js";
 import { runIngestion, runRecentIngestion } from "./ingest/run.js";
 import { log } from "./util/log.js";
-
-// --- minimal .env loader (no dependency) -----------------------------------
-function loadDotEnv() {
-  try {
-    const text = readFileSync(new URL("../.env", import.meta.url), "utf8");
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq === -1) continue;
-      const key = trimmed.slice(0, eq).trim();
-      const value = trimmed.slice(eq + 1).trim();
-      if (!(key in process.env)) process.env[key] = value;
-    }
-  } catch {
-    // No .env file (e.g. in CI where vars come from secrets) — that's fine.
-  }
-}
 
 function parseDays(argv: string[]): number {
   const idx = argv.indexOf("--days");
@@ -46,7 +29,6 @@ function parsePages(argv: string[]): number {
 }
 
 async function main() {
-  loadDotEnv();
   const argv = process.argv.slice(2);
 
   // --recent polls EDGAR's live "latest filings" feed instead of the daily

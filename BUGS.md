@@ -7,6 +7,72 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 
 ---
 
+## IT-9 — The publishable key can write to the database
+
+| | |
+|---|---|
+| **Status** | OPEN — needs a migration run against the live project |
+| **Opened** | 2026-07-23 |
+| **Severity** | High — public key with write access to all data |
+| **Files** | `supabase/migrations/0002_read_only_rls.sql` |
+
+**Finding**
+
+RLS was never enabled (Stage 1 deliberately deferred it). With RLS off,
+PostgREST allows the anon/publishable role to INSERT, UPDATE and DELETE. Probed
+on the live project with a deliberately invalid payload: the response was `400`
+(bad column) rather than `401`/`403` — the request was *authorised*, only
+malformed.
+
+This was survivable while the key only existed server-side. It is not, now that
+the app runs in the browser and the key is published to every visitor: anyone
+could delete every filing.
+
+**Fix** — `0002_read_only_rls.sql` enables RLS on all five tables and grants
+`select` only. The worker is unaffected (service_role bypasses RLS).
+
+**Action required:** run the migration in the Supabase SQL editor, then make
+sure `worker/.env` uses the **service_role** key — a worker still holding the
+publishable key will stop being able to write.
+
+---
+
+## IT-8 — The worker could never read its own .env file
+
+| | |
+|---|---|
+| **Status** | CLOSED |
+| **Opened** | 2026-07-23 |
+| **Closed** | 2026-07-23 |
+| **Severity** | High — `npm run ingest` was impossible to run locally |
+| **Files** | `worker/src/index.ts`, `worker/src/env.ts` |
+
+**Actual**
+
+```
+$ npm run ingest
+Error: Missing required env var: SUPABASE_URL.
+```
+…with a fully populated `worker/.env` sitting right there.
+
+**Root cause**
+
+`loadDotEnv()` was called inside `main()`. ES modules evaluate every static
+import *before* the importing module's body runs, so by the time `main()` was
+reached, `./ingest/run.js` → `./db/supabase.js` → `./config.js` had already run
+its `required()` checks against an empty `process.env` and thrown.
+
+It only ever worked in CI, where the variables come from repo secrets and are
+already in the environment — so the documented local workflow in the README had
+never actually worked.
+
+**Fix** — the loader moved to `src/env.ts`, which runs on import, and
+`index.ts` imports it first for its side effect. Real environment variables
+still win over the file, so CI behaviour is unchanged. Verified: a local
+`npm run ingest:recent` wrote 49 filings.
+
+---
+
 ## IT-7 — Ingestion reported success while ingesting nothing for a month
 
 | | |
@@ -29,31 +95,38 @@ scheduled ingest had reported *success* on Jul 13, 14, 15, 16, 17, 20, 21 and 22
 filings_seen: 0, filings_new: 0, errors: 0, status: "success"
 ```
 
-**Root cause**
+**Root cause** — a timing bug, hidden by a swallowed error
 
-`fetchForm4Index()` wrapped the daily-index fetch in a `try/catch` that treated
-*any* failure as "likely weekend/holiday" and returned `[]`. With zero entries
-there was nothing to process, so the run completed and logged itself successful.
+Two faults compounding:
 
-The underlying fetch failure is environmental: SEC rate-limits and blocks
-datacenter IP ranges, so `www.sec.gov/Archives/…` returns `403` from a GitHub
-Actions runner. The same request from a laptop returns `200` with 560 Form 4
-rows for 2026-07-22 — verified during this fix.
+1. **The job asked for a day EDGAR hadn't published yet.** `runIngestion(1)`
+   ingested *today*, and the cron runs at 23:00 UTC — but EDGAR publishes
+   `master.<date>.idx` hours after the day closes. Today's index simply does not
+   exist at 23:00 UTC.
+2. **The failure was invisible.** `fetchForm4Index()` treated *any* fetch error
+   as "likely weekend/holiday" and returned `[]`. Zero entries meant nothing to
+   process, so the run finished and logged itself `success`.
 
-So the code did not cause the outage, but it converted a loud, fixable `403`
-into eight consecutive green runs. That is the bug.
+A missing archive file does not return 404. EDGAR serves the archive from S3
+without list permission, so a file that isn't there comes back as **403
+AccessDenied** — which is why this looked like a block. Confirmed live:
+`master.20260723.idx` (today) → 403, `master.20260722.idx` (yesterday) → 200
+with 560 Form 4 rows.
+
+**Correction:** an earlier version of this ticket blamed SEC blocking datacenter
+IPs. That was wrong — the same 403 appears from a laptop, because the file
+genuinely isn't published yet.
 
 **Fix**
 
-- `edgarFetch` now attaches the HTTP `status` to the error it throws.
-- `fetchForm4Index` only swallows **404** ("no index published for that day" —
-  weekend, holiday, not yet finalised). Any other status is logged at error level
-  and rethrown, which marks the run `failed` in `ingestion_runs` instead of
-  `success`.
-
-**Still to do (environmental, not code)** — because SEC blocks the runner IP,
-scheduled ingestion may keep failing; it will now do so *visibly*. Running the
-worker locally is the reliable path: `cd worker && npm run ingest:days 5`.
+- `edgarFetch` attaches the HTTP `status` to the error it throws.
+- `fetchForm4Index` treats **403 and 404** as "no index published for this date"
+  (403 is S3's not-found), and rethrows anything else.
+- `runIngestion` now sweeps the last N **completed** days, ending *yesterday*.
+  Today is covered by the live feed (`--recent`), which reads a different
+  endpoint that is current within minutes.
+- Because 403 is ambiguous, a run where **no** day yielded a single filing is
+  now marked `failed`, not `success`. Silence was the actual defect.
 
 ---
 

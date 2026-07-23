@@ -54,13 +54,17 @@ export async function fetchForm4Index(date: Date): Promise<Form4IndexEntry[]> {
   try {
     raw = await edgarFetch<string>(url);
   } catch (err) {
-    // 404 genuinely means "no index published for that day" — weekend, holiday,
-    // or a day EDGAR hasn't finalised yet. Anything else (403 from a blocked
-    // IP, 429, 5xx) is a real failure and must not be reported as an empty day:
-    // doing so gave eight consecutive green runs that ingested nothing.
+    // EDGAR serves the archive from S3 without list permission, so a file that
+    // does not exist comes back as 403 AccessDenied, NOT 404. Both therefore
+    // mean "no index published for this date" — weekend, holiday, or a day
+    // EDGAR hasn't finalised yet (today's index lands well after 23:00 UTC).
+    // Anything else (429, 5xx, network) is a real failure and is rethrown.
+    //
+    // Because 403 is ambiguous, "no index" alone can't be trusted as healthy —
+    // runIngestion additionally fails a run where *no* day yielded anything.
     const status = (err as Error & { status?: number }).status;
-    if (status === 404) {
-      log.warn("No daily index for date (weekend/holiday)", { date: yyyymmdd(date) });
+    if (status === 403 || status === 404) {
+      log.warn("No daily index published for date", { date: yyyymmdd(date), status });
       return [];
     }
     log.error("Daily index fetch failed", {

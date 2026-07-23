@@ -96,7 +96,15 @@ export async function runRecentIngestion(maxPages = 3): Promise<void> {
 }
 
 /**
- * Ingest `days` calendar days ending today (UTC). days=1 → just today.
+ * Ingest `days` completed calendar days, ending YESTERDAY (UTC). days=1 →
+ * just yesterday.
+ *
+ * Deliberately not today: EDGAR publishes a day's `master.<date>.idx` hours
+ * after that day closes, so asking for today's index returns "not published"
+ * (403) — which is exactly how this job ingested nothing for a month while the
+ * 23:00 UTC cron reported success. Today's filings are covered by the live feed
+ * (`--recent`); this sweep is the completeness pass over finished days.
+ *
  * Weekends/holidays simply yield empty indexes and are skipped.
  */
 export async function runIngestion(days: number): Promise<void> {
@@ -109,13 +117,31 @@ export async function runIngestion(days: number): Promise<void> {
   let totalErrors = 0;
 
   try {
-    for (let i = 0; i < days; i++) {
+    for (let i = 1; i <= days; i++) {
       const d = new Date(today);
       d.setUTCDate(d.getUTCDate() - i);
       const { seen, created, errors } = await ingestDay(d);
       totalSeen += seen;
       totalNew += created;
       totalErrors += errors;
+    }
+
+    // "No index available" is reported as 403, which is indistinguishable from
+    // being blocked. So a run that saw nothing at all across every requested day
+    // is treated as a failure rather than a quiet success — the silence is the
+    // thing that hid a month of missing data.
+    if (totalSeen === 0) {
+      const msg =
+        `No daily index was available for any of the last ${days} day(s). ` +
+        `EDGAR may not have published yet, or access was refused.`;
+      await finishRun(runId, {
+        filings_seen: 0,
+        filings_new: 0,
+        errors: totalErrors + 1,
+        status: "failed",
+        notes: msg,
+      });
+      throw new Error(msg);
     }
 
     await finishRun(runId, {

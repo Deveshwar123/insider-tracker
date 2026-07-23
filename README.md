@@ -5,11 +5,17 @@ official [SEC EDGAR](https://www.sec.gov/edgar) public data.
 
 **Bring your own database.** This repo ships with no keys and no data. You point it
 at a free Supabase project that *you* own, and run it on your own machine — your
-credentials never leave it, and there is no shared server holding your data. Clone
-it, paste your two keys into `web/.env.local`, run `npm run dev`.
+credentials never leave it, and there is no shared server holding your data.
 
-> If you start the app before configuring it, it shows a setup page walking through
-> exactly these steps rather than an error.
+```bash
+git clone https://github.com/Deveshwar123/insider-tracker
+cd insider-tracker/web && npm install && npm run dev
+```
+
+The app **asks for your project URL and key on first run**, checks them against
+your database, and keeps them in your browser's local storage. No file editing
+required, and nothing to accidentally commit. (A `web/.env.local` still works if
+you prefer configuring by file.)
 
 This is **Stage 1 (MVP)**: Form 4 ingestion + a searchable dashboard. The roadmap
 extends through better parsing & history pages (Stage 2), 13D/13G support (Stage 3),
@@ -37,10 +43,17 @@ Two different keys, and mixing them up is the one mistake worth avoiding:
 
 | Key | Goes in | Safe to expose? |
 |---|---|---|
-| **anon / publishable** (`sb_publishable_…` or `eyJ…`) | `web/.env.local` | **Yes** — public by design, read-only, ships to the browser |
+| **anon / publishable** (`sb_publishable_…` or `eyJ…`) | the setup screen, or `web/.env.local` | **Yes** — public by design, read-only *once RLS is on*, ships to the browser |
 | **service_role / secret** | `worker/.env` only | **No** — bypasses row-level security. Never put it in `web/`, never commit it |
 
-`.env.local` and `.env` are both gitignored, so neither is ever committed.
+`.env.local` and `.env` are both gitignored, so neither is ever committed. If you
+configure the web app through its setup screen instead, the key never touches disk
+at all — it lives only in your browser.
+
+**Run [`0002_read_only_rls.sql`](supabase/migrations/0002_read_only_rls.sql).**
+Without it, row-level security is off and the *publishable* key can write to your
+database as well as read it — which matters because that key is visible to anyone
+who opens the app.
 
 ---
 
@@ -75,10 +88,13 @@ npm run ingest:days 7       # backfill the last 7 days
 
 ```bash
 cd web
-cp .env.local.example .env.local   # fill in NEXT_PUBLIC_SUPABASE_URL + ANON key
 npm install
 npm run dev                        # http://localhost:3000
 ```
+
+The first screen asks for your project URL and publishable key, verifies them
+against your database, and stores them in your browser. If you'd rather use a
+file, copy `.env.local.example` to `.env.local` and fill it in instead.
 
 ---
 
@@ -87,11 +103,8 @@ npm run dev                        # http://localhost:3000
 - **Database:** Supabase free tier.
 - **Web app:** Import the repo into [Vercel](https://vercel.com), set the **Root
   Directory** to `web`, and add the two `NEXT_PUBLIC_*` env vars. Deploy.
-- **Running it locally is the recommended path** — and not only for privacy. SEC
-  rate-limits and sometimes outright blocks cloud/datacenter IP ranges, so
-  `Archives/…` fetches that work fine from a laptop can return `403` from a CI
-  runner. If scheduled ingestion goes quiet, run the worker locally instead:
-  `cd worker && npm run ingest:days 5`.
+- **Running it locally is the recommended path.** The dashboard needs no server
+  of its own — it talks straight to your Supabase project from the browser.
 - **Ingestion:** Also wired as GitHub Actions cron
   ([`.github/workflows/ingest.yml`](.github/workflows/ingest.yml)). Add three repo
   secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SEC_USER_AGENT`. It polls
@@ -101,9 +114,10 @@ npm run dev                        # http://localhost:3000
   typechecks `worker/` on every push. The build deliberately runs with **no**
   Supabase credentials — needing them at build time is a bug.
 
-> GitHub Pages cannot host this app: every route is server-rendered and it has
-> API routes, so there is no static bundle to publish. The repo used to carry a
-> Pages workflow that failed on every run; it has been removed.
+> GitHub Pages cannot host this app as-is: it still has an API route (the quote
+> proxy) and is built as a Next.js server app. The repo used to carry a Pages
+> workflow that failed on every run; it has been removed. The intended way to use
+> this project is to clone it and run it locally.
 
 ---
 
@@ -115,8 +129,11 @@ Two paths into the same pipeline:
   latest filings, so a trade lands in the DB minutes after it is published. The
   feed lists one entry per *party* (issuer + each reporting owner), so entries are
   deduped by accession number before anything is fetched.
-- **Sweep (`--days N`, nightly):** walks the full `master.<date>.idx` daily index.
-  The feed only reaches back ~100 entries per page, so this is the completeness
+- **Sweep (`--days N`, nightly):** walks the full `master.<date>.idx` daily index
+  for the last N **completed** days, ending yesterday. Not today: EDGAR publishes
+  a day's index hours after that day closes, and a missing index returns `403`
+  (S3 not-found), not `404`. Asking for today's index is how this job silently
+  ingested nothing for a month. The feed covers today; this is the completeness
   backstop for anything a poll window missed.
 
 Both then do the same thing:
@@ -137,4 +154,5 @@ A single malformed filing is logged and skipped; it never aborts the batch.
   simplified — addressed in Stage 2).
 - Tickers come straight from the filing XML and may be missing; Stage 2 adds the
   official CIK↔ticker map.
-- RLS is left off for Stage 1 (all data is public, read-only). Enable it in Stage 5.
+- **Run `0002_read_only_rls.sql`.** Without it the publishable key can write to
+  your database, not just read it — see the key table above.

@@ -1,15 +1,21 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import FilingsTable from "@/app/components/FilingsTable";
+import { ErrorState, TableSkeleton } from "@/app/components/States";
 import { getFilingsByIssuer } from "@/lib/queries";
+import { useAsync } from "@/lib/useAsync";
 
-export const dynamic = "force-dynamic";
-
-export default async function CompanyPage({ params }: { params: { cik: string } }) {
+export default function CompanyPage({ params }: { params: { cik: string } }) {
   const cik = Number(params.cik);
-  if (!Number.isFinite(cik)) notFound();
+  const valid = params.cik !== "" && Number.isFinite(cik) && cik > 0;
 
-  const filings = await getFilingsByIssuer(cik);
+  const { data, error, loading, reload } = useAsync(
+    () => (valid ? getFilingsByIssuer(cik) : Promise.resolve([])),
+    [cik, valid]
+  );
+
+  const filings = data ?? [];
   const issuer = filings[0]?.issuers;
 
   return (
@@ -17,12 +23,27 @@ export default async function CompanyPage({ params }: { params: { cik: string } 
       <Link href="/" className="back">
         ← Back to filings
       </Link>
-      <h1>
-        {issuer?.name ?? `CIK ${cik}`}{" "}
-        {issuer?.ticker ? <span className="badge">{issuer.ticker}</span> : null}
-      </h1>
-      <p className="subtitle">{filings.length} insider filing(s) for this company.</p>
-      <FilingsTable filings={filings} />
+
+      {!valid ? (
+        <ErrorState message={`"${params.cik}" is not a valid company CIK.`} />
+      ) : (
+        <>
+          <h1>
+            {issuer?.name ?? `CIK ${cik}`}{" "}
+            {issuer?.ticker ? <span className="badge">{issuer.ticker}</span> : null}
+          </h1>
+          <p className="subtitle">
+            {loading ? "Loading filings…" : `${filings.length} insider filing(s) for this company.`}
+          </p>
+          {loading ? (
+            <TableSkeleton />
+          ) : error ? (
+            <ErrorState message={error} onRetry={reload} />
+          ) : (
+            <FilingsTable filings={filings} />
+          )}
+        </>
+      )}
     </>
   );
 }

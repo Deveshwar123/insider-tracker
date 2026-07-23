@@ -1,32 +1,39 @@
-// Server-side Supabase read client for the Next.js app.
-// Uses the public anon key — the app only ever READS public SEC data.
+// Supabase read client.
+//
+// Credentials come from lib/credentials (setup screen → localStorage, or
+// .env.local), so queries run in the browser against the reader's own project.
+// The key involved is the publishable/anon one, which is public by design; the
+// service-role key belongs to the worker and never reaches this app.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+import { getCredentials, type Credentials } from "./credentials";
 
 export const MISSING_CONFIG_MESSAGE =
-  "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. " +
-  "Copy web/.env.local.example to web/.env.local and fill it in.";
+  "No Supabase project is configured yet. Add your project URL and publishable key on the setup screen.";
 
 /** True when the app has credentials to read with. */
-export const isConfigured = Boolean(url && anonKey);
+export function isConfigured(): boolean {
+  return getCredentials() !== null;
+}
 
-let client: SupabaseClient | null = null;
+// One client per credential pair, so re-renders don't build a new one each time
+// and switching projects doesn't keep using the old connection.
+let cached: { creds: Credentials; client: SupabaseClient } | null = null;
 
-/**
- * Built on first use rather than at import time. Throwing at import made
- * `next build` fail outright wherever the env wasn't set — CI, a fresh clone —
- * even though the build itself never queries. Now a misconfigured deploy fails
- * at request time with this message, and the build stays credential-free.
- */
 export function getSupabase(): SupabaseClient {
-  if (!isConfigured) throw new Error(MISSING_CONFIG_MESSAGE);
-  if (!client) {
-    client = createClient(url as string, anonKey as string, {
-      auth: { persistSession: false },
-    });
+  const creds = getCredentials();
+  if (!creds) throw new Error(MISSING_CONFIG_MESSAGE);
+  if (cached && cached.creds.url === creds.url && cached.creds.key === creds.key) {
+    return cached.client;
   }
+  const client = createClient(creds.url, creds.key, { auth: { persistSession: false } });
+  cached = { creds, client };
   return client;
+}
+
+/** Verifies a URL/key pair by running the smallest possible read. */
+export async function testCredentials(creds: Credentials): Promise<void> {
+  const probe = createClient(creds.url, creds.key, { auth: { persistSession: false } });
+  const { error } = await probe.from("filings").select("accession_no").limit(1);
+  if (error) throw new Error(error.message);
 }

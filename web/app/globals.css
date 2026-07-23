@@ -919,3 +919,51 @@ tbody tr,
 }
 .setup .note { font-size: 13.5px; }
 .setup-footer { margin-top: 24px; color: var(--muted); font-size: 14px; }
+
+/* ---- setup form ---------------------------------------------------------- */
+.setup-form { display: flex; flex-direction: column; gap: 6px; margin: 28px 0 8px; max-width: 560px; }
+.setup-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+.setup-form .field-hint { font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.setup-form input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: var(--font-mono), monospace;
+  font-size: 13px;
+}
+.setup-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.setup-form button {
+  margin-top: 20px;
+  align-self: flex-start;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.setup-form button:disabled { opacity: 0.6; cursor: default; }
+.field-error, .field-warning {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.field-error { background: var(--red-bg, rgba(239,68,68,0.12)); color: var(--red); }
+.field-warning { background: rgba(234,179,8,0.12); color: #eab308; }
+.setup-details { margin-top: 34px; border-top: 1px solid var(--border-soft); padding-top: 18px; }
+.setup-details summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+.setup-details[open] summary { margin-bottom: 12px; color: var(--text); }
