@@ -1,6 +1,6 @@
 // All read queries used by the pages, in one place.
 
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 import type { FilingRow, FilingDetail } from "./types";
 
 const FILING_SELECT =
@@ -12,7 +12,7 @@ const FILING_DETAIL_SELECT = `${FILING_SELECT}, transactions(*)`;
 
 /** Newest filings for the dashboard, with their transactions joined in. */
 export async function getLatestFilings(limit = 300): Promise<FilingDetail[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("filings")
     .select(FILING_DETAIL_SELECT)
     .order("filing_date", { ascending: false })
@@ -34,8 +34,8 @@ export async function searchFilings(q: string, limit = 300): Promise<FilingDetai
   const like = `%${term}%`;
 
   const [issuersRes, insidersRes] = await Promise.all([
-    supabase.from("issuers").select("cik").or(`name.ilike.${like},ticker.ilike.${like}`).limit(50),
-    supabase.from("insiders").select("cik").ilike("name", like).limit(50),
+    getSupabase().from("issuers").select("cik").or(`name.ilike.${like},ticker.ilike.${like}`).limit(50),
+    getSupabase().from("insiders").select("cik").ilike("name", like).limit(50),
   ]);
 
   if (issuersRes.error) throw new Error(issuersRes.error.message);
@@ -50,7 +50,7 @@ export async function searchFilings(q: string, limit = 300): Promise<FilingDetai
   if (issuerCiks.length) orParts.push(`issuer_cik.in.(${issuerCiks.join(",")})`);
   if (insiderCiks.length) orParts.push(`insider_cik.in.(${insiderCiks.join(",")})`);
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("filings")
     .select(FILING_DETAIL_SELECT)
     .or(orParts.join(","))
@@ -62,7 +62,7 @@ export async function searchFilings(q: string, limit = 300): Promise<FilingDetai
 
 /** One filing + its transactions, by accession number. */
 export async function getFilingByAccession(accession: string): Promise<FilingDetail | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("filings")
     .select(`${FILING_SELECT}, transactions(*)`)
     .eq("accession_no", accession)
@@ -76,7 +76,7 @@ export async function getFilingByAccession(accession: string): Promise<FilingDet
 
 /** All filings for one issuer (company history page). */
 export async function getFilingsByIssuer(cik: number, limit = 200): Promise<FilingRow[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("filings")
     .select(FILING_SELECT)
     .eq("issuer_cik", cik)
@@ -88,7 +88,7 @@ export async function getFilingsByIssuer(cik: number, limit = 200): Promise<Fili
 
 /** All filings by one insider (insider history page). */
 export async function getFilingsByInsider(cik: number, limit = 200): Promise<FilingRow[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("filings")
     .select(FILING_SELECT)
     .eq("insider_cik", cik)

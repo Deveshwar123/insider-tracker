@@ -41,7 +41,8 @@ never calls EDGAR on a user request, so it's fast and never hits rate limits.
 cd worker
 cp .env.example .env        # fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SEC_USER_AGENT
 npm install
-npm run ingest              # ingest today's filings
+npm run ingest:recent       # live: whatever EDGAR just published
+npm run ingest              # ingest today's filings (full daily index)
 npm run ingest:days 7       # backfill the last 7 days
 ```
 
@@ -65,17 +66,36 @@ npm run dev                        # http://localhost:3000
 - **Database:** Supabase free tier.
 - **Web app:** Import the repo into [Vercel](https://vercel.com), set the **Root
   Directory** to `web`, and add the two `NEXT_PUBLIC_*` env vars. Deploy.
-- **Ingestion:** Already wired as a GitHub Actions cron
+- **Ingestion:** Already wired as GitHub Actions cron
   ([`.github/workflows/ingest.yml`](.github/workflows/ingest.yml)). Add three repo
-  secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SEC_USER_AGENT`. It runs
-  weekdays at 23:00 UTC and can be triggered manually from the Actions tab
-  (with a `days` input for backfills).
+  secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SEC_USER_AGENT`. It polls
+  the live feed every 15 minutes on weekdays and does a full daily sweep at 23:00
+  UTC; both can also be run by hand from the Actions tab.
+- **CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds `web/` and
+  typechecks `worker/` on every push. The build deliberately runs with **no**
+  Supabase credentials — needing them at build time is a bug.
+
+> GitHub Pages cannot host this app: every route is server-rendered and it has
+> API routes, so there is no static bundle to publish. The repo used to carry a
+> Pages workflow that failed on every run; it has been removed.
 
 ---
 
 ## How ingestion works
 
-1. Fetch EDGAR's daily `master.<date>.idx` index and keep only Form 4 / 4/A rows.
+Two paths into the same pipeline:
+
+- **Live (`--recent`, every 15 min):** reads EDGAR's `getcurrent` Atom feed of the
+  latest filings, so a trade lands in the DB minutes after it is published. The
+  feed lists one entry per *party* (issuer + each reporting owner), so entries are
+  deduped by accession number before anything is fetched.
+- **Sweep (`--days N`, nightly):** walks the full `master.<date>.idx` daily index.
+  The feed only reaches back ~100 entries per page, so this is the completeness
+  backstop for anything a poll window missed.
+
+Both then do the same thing:
+
+1. Keep only Form 4 / 4/A rows.
 2. Dedupe against the DB by `accession_no` (the global unique filing id).
 3. Download each new filing's full submission `.txt`, extract the embedded
    ownership XML, and parse it defensively (every field optional).

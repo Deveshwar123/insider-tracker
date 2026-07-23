@@ -268,8 +268,10 @@ async function findExisting(db: SupabaseClient, accessions: string[]): Promise<S
 }
 
 async function saveFiling(db: SupabaseClient, entry: IndexEntry, parsed: Parsed): Promise<void> {
+  // Foreign keys first, and surface their errors — an ignored issuer/insider
+  // failure came back later as an opaque foreign-key violation on the filing.
   if (parsed.issuerCik != null) {
-    await db.from("issuers").upsert(
+    const { error } = await db.from("issuers").upsert(
       {
         cik: parsed.issuerCik,
         name: parsed.issuerName ?? entry.companyName ?? "Unknown",
@@ -278,12 +280,14 @@ async function saveFiling(db: SupabaseClient, entry: IndexEntry, parsed: Parsed)
       },
       { onConflict: "cik" }
     );
+    if (error) throw new Error(`issuer upsert (${parsed.issuerCik}): ${error.message}`);
   }
   if (parsed.insiderCik != null) {
-    await db.from("insiders").upsert(
+    const { error } = await db.from("insiders").upsert(
       { cik: parsed.insiderCik, name: parsed.insiderName ?? "Unknown", updated_at: new Date().toISOString() },
       { onConflict: "cik" }
     );
+    if (error) throw new Error(`insider upsert (${parsed.insiderCik}): ${error.message}`);
   }
   const { data: filingRow, error: filingErr } = await db
     .from("filings")
@@ -337,6 +341,10 @@ export interface RefreshResult {
   processed: number;
   remaining: number;
   date: string | null;
+  /** Filings in this batch that could not be fetched/parsed/saved. */
+  errors: number;
+  /** Message from the first failure, so a silent all-fail is diagnosable. */
+  firstError: string | null;
 }
 
 export async function refreshLatest(): Promise<RefreshResult> {
@@ -353,21 +361,36 @@ export async function refreshLatest(): Promise<RefreshResult> {
       break;
     }
   }
-  if (entries.length === 0) return { new: 0, processed: 0, remaining: 0, date: null };
+  if (entries.length === 0) {
+    return { new: 0, processed: 0, remaining: 0, date: null, errors: 0, firstError: null };
+  }
 
   const existing = await findExisting(db, entries.map((e) => e.accessionNo));
   const fresh = entries.filter((e) => !existing.has(e.accessionNo));
   const batch = fresh.slice(0, CAP);
 
   let created = 0;
+  let errors = 0;
+  let firstError: string | null = null;
   for (const entry of batch) {
     try {
       const parsed = await fetchAndParse(entry);
       await saveFiling(db, entry, parsed);
       created++;
-    } catch {
-      // one bad filing never aborts the batch
+    } catch (err) {
+      // One bad filing never aborts the batch — but it is counted and the first
+      // message is returned. Swallowing these silently made a totally failed
+      // refresh (bad service key, EDGAR block) report "up to date".
+      errors++;
+      if (firstError === null) firstError = (err as Error).message;
     }
   }
-  return { new: created, processed: batch.length, remaining: fresh.length - batch.length, date: usedDate };
+  return {
+    new: created,
+    processed: batch.length,
+    remaining: fresh.length - batch.length,
+    date: usedDate,
+    errors,
+    firstError,
+  };
 }

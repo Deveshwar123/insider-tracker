@@ -7,7 +7,8 @@
 //   4. Save it (issuer, insider, filing, transactions).
 // A single bad filing is logged and counted, but never aborts the batch.
 
-import { fetchForm4Index } from "../edgar/index-fetcher.js";
+import { fetchForm4Index, type Form4IndexEntry } from "../edgar/index-fetcher.js";
+import { fetchRecentForm4s } from "../edgar/recent-feed.js";
 import { fetchAndParseForm4 } from "../edgar/form4-parser.js";
 import { findExistingAccessions, saveFiling, startRun, finishRun } from "../db/supabase.js";
 import { log } from "../util/log.js";
@@ -16,17 +17,20 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Process a single calendar day. Returns counters for the run log. */
-async function ingestDay(date: Date): Promise<{ seen: number; created: number; errors: number }> {
-  const entries = await fetchForm4Index(date);
+/**
+ * Dedupe against the DB, then fetch/parse/save what's left. Shared by the daily
+ * sweep and the live feed so both behave identically: a single bad filing is
+ * logged and counted, never fatal.
+ */
+async function ingestEntries(
+  entries: Form4IndexEntry[]
+): Promise<{ seen: number; created: number; errors: number }> {
   if (entries.length === 0) return { seen: 0, created: 0, errors: 0 };
 
-  // Dedupe: ask the DB which accessions we already have, process only the rest.
   const existing = await findExistingAccessions(entries.map((e) => e.accessionNo));
   const fresh = entries.filter((e) => !existing.has(e.accessionNo));
 
-  log.info("Day dedupe complete", {
-    date: isoDate(date),
+  log.info("Dedupe complete", {
     seen: entries.length,
     already: existing.size,
     toProcess: fresh.length,
@@ -51,6 +55,44 @@ async function ingestDay(date: Date): Promise<{ seen: number; created: number; e
   }
 
   return { seen: entries.length, created, errors };
+}
+
+/** Process a single calendar day. Returns counters for the run log. */
+async function ingestDay(date: Date): Promise<{ seen: number; created: number; errors: number }> {
+  log.info("Ingesting day", { date: isoDate(date) });
+  return ingestEntries(await fetchForm4Index(date));
+}
+
+/**
+ * Live mode: ingest whatever EDGAR has published most recently. Cheap enough to
+ * run every few minutes, which is what makes the dashboard update as insiders
+ * file rather than once a night.
+ */
+export async function runRecentIngestion(maxPages = 3): Promise<void> {
+  const runId = await startRun(isoDate(new Date()));
+  try {
+    const entries = await fetchRecentForm4s(maxPages);
+    const { seen, created, errors } = await ingestEntries(entries);
+
+    await finishRun(runId, {
+      filings_seen: seen,
+      filings_new: created,
+      errors,
+      status: "success",
+      notes: `Live feed poll (${maxPages} page(s)).`,
+    });
+
+    log.info("Live poll complete", { seen, new: created, errors });
+  } catch (err) {
+    await finishRun(runId, {
+      filings_seen: 0,
+      filings_new: 0,
+      errors: 1,
+      status: "failed",
+      notes: (err as Error).message,
+    });
+    throw err;
+  }
 }
 
 /**

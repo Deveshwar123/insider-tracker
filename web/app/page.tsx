@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import SearchBar from "./components/SearchBar";
 import FilingsExplorer from "./components/FilingsExplorer";
 import RefreshButton from "./components/RefreshButton";
+import LiveUpdater from "./components/LiveUpdater";
 import StatCards from "./components/StatCards";
 import ClusterBuys from "./components/ClusterBuys";
 import { getLatestFilings, searchFilings } from "@/lib/queries";
@@ -26,11 +27,14 @@ export default async function HomePage({
     <>
       <div className="page-head">
         <div>
-          <h1>{q ? `Results for “${q}”` : "Insider filings"}</h1>
+          <h1>
+            {q ? `Results for “${q}”` : "Insider filings"}
+            {!q && <LiveUpdater />}
+          </h1>
           <p className="subtitle">
             {q
               ? `${filings.length} filing(s) matching ticker, company, or insider.`
-              : "Latest Form 4 filings from SEC EDGAR — buys shown first."}
+              : "Latest Form 4 filings from SEC EDGAR, updated as insiders file — buys shown first."}
           </p>
         </div>
         <RefreshButton />

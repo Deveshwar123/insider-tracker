@@ -9,7 +9,7 @@
 // minimal .env here so `npm run` works without extra flags).
 
 import { readFileSync } from "node:fs";
-import { runIngestion } from "./ingest/run.js";
+import { runIngestion, runRecentIngestion } from "./ingest/run.js";
 import { log } from "./util/log.js";
 
 // --- minimal .env loader (no dependency) -----------------------------------
@@ -39,9 +39,26 @@ function parseDays(argv: string[]): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
 }
 
+function parsePages(argv: string[]): number {
+  const idx = argv.indexOf("--pages");
+  const n = idx !== -1 ? Number(argv[idx + 1]) : 3;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 3;
+}
+
 async function main() {
   loadDotEnv();
-  const days = parseDays(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+
+  // --recent polls EDGAR's live "latest filings" feed instead of the daily
+  // index, so a short-interval cron picks trades up minutes after they publish.
+  if (argv.includes("--recent")) {
+    const pages = parsePages(argv);
+    log.info("Worker starting (live feed)", { pages });
+    await runRecentIngestion(pages);
+    return;
+  }
+
+  const days = parseDays(argv);
   log.info("Worker starting", { days });
   await runIngestion(days);
 }

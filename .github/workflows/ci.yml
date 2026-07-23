@@ -1,0 +1,46 @@
+name: CI
+
+# Builds the Next.js app on every push/PR. The repo previously carried a GitHub
+# Pages workflow instead, which could never succeed: it looked for a package.json
+# at the repo root (there isn't one — the app lives in web/) and published ./out,
+# which this app never produces because every route is server-rendered. Nothing
+# was checking that `next build` still worked, so a broken import sat on main.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: Build web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # No Supabase env here on purpose: the build must not need credentials.
+      - run: npm run build
+
+  worker:
+    name: Typecheck worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck

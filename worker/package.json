@@ -6,6 +6,7 @@
   "description": "SEC Form 4 ingestion worker — fetches EDGAR filings and writes them to Supabase.",
   "scripts": {
     "ingest": "tsx src/index.ts",
+    "ingest:recent": "tsx src/index.ts --recent",
     "ingest:days": "tsx src/index.ts --days",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"

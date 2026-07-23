@@ -1,19 +1,33 @@
 name: Ingest SEC Form 4
 
-# Runs the ingestion worker on a schedule and on manual demand.
+# Two schedules, one worker:
+#
+#   * live poll   — every 15 minutes on weekdays, reads EDGAR's "latest filings"
+#                   feed so trades land in the DB minutes after they publish.
+#   * daily sweep — 23:00 UTC weekdays, walks the full daily master index. The
+#                   feed only reaches back ~100 entries per page, so this is the
+#                   completeness backstop for anything a poll window missed.
+#
+# Note: GitHub disables scheduled workflows on a repo with no commits for 60
+# days. If polling ever goes quiet, re-enable it in the Actions tab.
 on:
   schedule:
-    # 23:00 UTC every weekday (after US market close + SEC filing settle).
-    # Cron is UTC. Adjust if you want a different time.
-    - cron: "0 23 * * 1-5"
+    - cron: "*/15 * * * 1-5"   # live poll
+    - cron: "0 23 * * 1-5"     # nightly full-day sweep
   workflow_dispatch:
     inputs:
+      mode:
+        description: "recent = live feed poll, days = full daily-index sweep"
+        required: false
+        default: "recent"
+        type: choice
+        options: ["recent", "days"]
       days:
-        description: "How many calendar days to ingest (1 = today only)"
+        description: "For mode=days: how many calendar days to ingest (1 = today only)"
         required: false
         default: "1"
 
-# Avoid overlapping runs stepping on each other.
+# Never let two ingests race: they would fight over the same accession numbers.
 concurrency:
   group: ingest
   cancel-in-progress: false
@@ -41,5 +55,11 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Run ingestion
+      # The 23:00 cron does the full sweep; every other trigger polls the feed.
+      - name: Live feed poll
+        if: github.event.schedule == '*/15 * * * 1-5' || github.event.inputs.mode == 'recent'
+        run: npx tsx src/index.ts --recent --pages 3
+
+      - name: Full daily-index sweep
+        if: github.event.schedule == '0 23 * * 1-5' || github.event.inputs.mode == 'days'
         run: npx tsx src/index.ts --days ${{ github.event.inputs.days || '1' }}

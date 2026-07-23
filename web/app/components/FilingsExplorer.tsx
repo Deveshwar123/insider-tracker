@@ -96,16 +96,20 @@ export default function FilingsExplorer({ filings }: { filings: FilingSummary[] 
     const chunks: string[][] = [];
     for (let i = 0; i < tickers.length; i += 40) chunks.push(tickers.slice(i, i + 40));
     chunks.forEach(async (chunk) => {
+      // A chunk that fails must still resolve its tickers to null, otherwise
+      // those cells sit on the loading skeleton forever.
+      const blanks = () => Object.fromEntries(chunk.map((t) => [t, null]));
       try {
         const res = await fetch("/api/quotes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tickers: chunk }),
         });
-        const data = await res.json();
-        if (!cancelled && data?.quotes) setQuotes((prev) => ({ ...prev, ...data.quotes }));
+        const data = res.ok ? await res.json() : null;
+        if (cancelled) return;
+        setQuotes((prev) => ({ ...prev, ...blanks(), ...(data?.quotes ?? {}) }));
       } catch {
-        /* leave as "—" */
+        if (!cancelled) setQuotes((prev) => ({ ...prev, ...blanks() }));
       }
     });
     return () => {
