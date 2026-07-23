@@ -5,7 +5,9 @@ import RefreshButton from "./components/RefreshButton";
 import LiveUpdater from "./components/LiveUpdater";
 import StatCards from "./components/StatCards";
 import ClusterBuys from "./components/ClusterBuys";
+import SetupGuide from "./components/SetupGuide";
 import { getLatestFilings, searchFilings } from "@/lib/queries";
+import { isConfigured } from "@/lib/supabase";
 import { summarize } from "@/lib/summary";
 import { computeStats, computeClusterBuys } from "@/lib/stats";
 
@@ -17,6 +19,9 @@ export default async function HomePage({
 }: {
   searchParams: { q?: string };
 }) {
+  // A fresh clone has no credentials — explain the setup instead of throwing.
+  if (!isConfigured) return <SetupGuide />;
+
   const q = searchParams.q?.trim() ?? "";
   const filings = q ? await searchFilings(q) : await getLatestFilings(500);
   const summaries = filings.map(summarize);

@@ -66,7 +66,12 @@ export async function edgarFetch<T = string>(
       }
 
       if (!res.ok) {
-        throw new Error(`EDGAR request failed: ${res.status} ${res.statusText} for ${url}`);
+        const err = new Error(`EDGAR request failed: ${res.status} ${res.statusText} for ${url}`);
+        // Callers need to tell "this day has no index" (404) apart from "EDGAR
+        // refused us" (403, blocked IP or a bad User-Agent). Treating both as
+        // "nothing to ingest" is what let a blocked worker report success.
+        (err as Error & { status?: number }).status = res.status;
+        throw err;
       }
 
       return (as === "json" ? await res.json() : await res.text()) as T;

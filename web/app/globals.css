@@ -867,3 +867,55 @@ tbody tr,
 @media (prefers-reduced-motion: reduce) {
   .live-dot { animation: none; opacity: 1; }
 }
+
+/* ---- first-run setup guide ----------------------------------------------- */
+.setup { max-width: 760px; margin: 0 auto; padding: 8px 0 40px; }
+.setup h1 { margin-bottom: 8px; }
+.setup-steps { list-style: none; counter-reset: step; padding: 0; margin: 32px 0 0; }
+.setup-steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 0 0 28px 46px;
+  border-left: 1px solid var(--border-soft);
+  margin-left: 13px;
+}
+.setup-steps > li:last-child { border-left-color: transparent; padding-bottom: 8px; }
+.setup-steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: -14px;
+  top: 0;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.setup-steps h2 { font-size: 16px; margin: 2px 0 8px; }
+.setup-steps p { margin: 0 0 10px; color: var(--muted); line-height: 1.6; }
+.setup code {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.9em;
+  background: var(--border-soft);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.setup pre {
+  background: var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--font-mono), monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  margin: 0 0 10px;
+}
+.setup .note { font-size: 13.5px; }
+.setup-footer { margin-top: 24px; color: var(--muted); font-size: 14px; }

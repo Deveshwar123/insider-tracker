@@ -54,11 +54,21 @@ export async function fetchForm4Index(date: Date): Promise<Form4IndexEntry[]> {
   try {
     raw = await edgarFetch<string>(url);
   } catch (err) {
-    log.warn("No daily index for date (likely weekend/holiday)", {
+    // 404 genuinely means "no index published for that day" — weekend, holiday,
+    // or a day EDGAR hasn't finalised yet. Anything else (403 from a blocked
+    // IP, 429, 5xx) is a real failure and must not be reported as an empty day:
+    // doing so gave eight consecutive green runs that ingested nothing.
+    const status = (err as Error & { status?: number }).status;
+    if (status === 404) {
+      log.warn("No daily index for date (weekend/holiday)", { date: yyyymmdd(date) });
+      return [];
+    }
+    log.error("Daily index fetch failed", {
       date: yyyymmdd(date),
+      status,
       error: (err as Error).message,
     });
-    return [];
+    throw err;
   }
 
   const entries: Form4IndexEntry[] = [];

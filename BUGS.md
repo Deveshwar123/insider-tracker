@@ -7,6 +7,55 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 
 ---
 
+## IT-7 — Ingestion reported success while ingesting nothing for a month
+
+| | |
+|---|---|
+| **Status** | CLOSED (detection); ROOT CAUSE is environmental |
+| **Opened** | 2026-07-23 |
+| **Closed** | 2026-07-23 |
+| **Severity** | Critical — the dashboard silently served month-old data |
+| **Files** | `worker/src/edgar/index-fetcher.ts`, `worker/src/edgar/client.ts` |
+
+**Symptom**
+
+The dashboard's newest filing was **2026-06-26**, 27 days stale, even though the
+scheduled ingest had reported *success* on Jul 13, 14, 15, 16, 17, 20, 21 and 22.
+
+`ingestion_runs` told the story — every run:
+
+```
+filings_seen: 0, filings_new: 0, errors: 0, status: "success"
+```
+
+**Root cause**
+
+`fetchForm4Index()` wrapped the daily-index fetch in a `try/catch` that treated
+*any* failure as "likely weekend/holiday" and returned `[]`. With zero entries
+there was nothing to process, so the run completed and logged itself successful.
+
+The underlying fetch failure is environmental: SEC rate-limits and blocks
+datacenter IP ranges, so `www.sec.gov/Archives/…` returns `403` from a GitHub
+Actions runner. The same request from a laptop returns `200` with 560 Form 4
+rows for 2026-07-22 — verified during this fix.
+
+So the code did not cause the outage, but it converted a loud, fixable `403`
+into eight consecutive green runs. That is the bug.
+
+**Fix**
+
+- `edgarFetch` now attaches the HTTP `status` to the error it throws.
+- `fetchForm4Index` only swallows **404** ("no index published for that day" —
+  weekend, holiday, not yet finalised). Any other status is logged at error level
+  and rethrown, which marks the run `failed` in `ingestion_runs` instead of
+  `success`.
+
+**Still to do (environmental, not code)** — because SEC blocks the runner IP,
+scheduled ingestion may keep failing; it will now do so *visibly*. Running the
+worker locally is the reliable path: `cd worker && npm run ingest:days 5`.
+
+---
+
 ## IT-1 — `next build` fails: dead Prisma import
 
 | | |
