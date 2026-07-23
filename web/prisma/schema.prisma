@@ -37,7 +37,7 @@ model Filing {
   formType        String    @default("4") @map("form_type")
   issuerCik       BigInt    @map("issuer_cik")
   insiderCik      BigInt    @map("insider_cik")
-  filingDate      DateTime? @map("filing_date") @db.Date
+  filingDate      DateTime @map("filing_date") @db.Date
   periodOfReport  DateTime? @map("period_of_report") @db.Date
   insiderTitle    String?   @map("insider_title")
   isDirector      Boolean?  @map("is_director")
@@ -85,8 +85,8 @@ model IngestionRun {
   startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz
   finishedAt  DateTime? @map("finished_at") @db.Timestamptz
   targetDate  DateTime? @map("target_date") @db.Date
-  fillingsSeen Int?     @map("filings_seen")
-  fillingsNew  Int?     @map("filings_new")
+  filingsSeen Int?     @map("filings_seen")
+  filingsNew  Int?     @map("filings_new")
   errors      Int?
   status      String?
   notes       String?
