@@ -16,6 +16,7 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 | **Closed** | 2026-07-23 |
 | **Severity** | Critical — the dashboard silently served month-old data |
 | **Files** | `worker/src/edgar/index-fetcher.ts`, `worker/src/edgar/client.ts` |
+| **Fixed in** | `7fa2dd8` |
 
 **Symptom**
 
