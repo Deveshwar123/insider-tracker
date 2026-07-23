@@ -27,11 +27,20 @@ async function ingestEntries(
 ): Promise<{ seen: number; created: number; errors: number }> {
   if (entries.length === 0) return { seen: 0, created: 0, errors: 0 };
 
-  const existing = await findExistingAccessions(entries.map((e) => e.accessionNo));
-  const fresh = entries.filter((e) => !existing.has(e.accessionNo));
+  // The daily index lists one row per PARTY — the issuer and each reporting
+  // owner — so a single filing appears two or three times. Without this, every
+  // filing was downloaded and parsed once per party: the upserts made it
+  // harmless, but it multiplied the work (and the load on SEC) by ~2-3x.
+  const unique = new Map<string, Form4IndexEntry>();
+  for (const e of entries) if (!unique.has(e.accessionNo)) unique.set(e.accessionNo, e);
+  const filings = [...unique.values()];
+
+  const existing = await findExistingAccessions(filings.map((e) => e.accessionNo));
+  const fresh = filings.filter((e) => !existing.has(e.accessionNo));
 
   log.info("Dedupe complete", {
-    seen: entries.length,
+    rows: entries.length,
+    filings: filings.length,
     already: existing.size,
     toProcess: fresh.length,
   });
@@ -54,7 +63,7 @@ async function ingestEntries(
     }
   }
 
-  return { seen: entries.length, created, errors };
+  return { seen: filings.length, created, errors };
 }
 
 /** Process a single calendar day. Returns counters for the run log. */

@@ -63,6 +63,23 @@ function val(node: unknown): string | null {
   return s === "" ? null : s;
 }
 
+/**
+ * A calendar date, as `YYYY-MM-DD`, or null.
+ *
+ * Filers do not stick to a plain date: values like `2026-07-17-05:00` (a date
+ * with a UTC offset glued on) and `2026-07-17T00:00:00` both appear in real
+ * Form 4 XML. Postgres rejects those outright — `invalid input syntax for type
+ * date` — which failed the whole filing and silently dropped it from the DB.
+ * Anything that doesn't start with a plain date is discarded rather than
+ * guessed at, since these columns are nullable.
+ */
+function dateVal(node: unknown): string | null {
+  const s = val(node);
+  if (s == null) return null;
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1]! : null;
+}
+
 function num(node: unknown): number | null {
   const s = val(node);
   if (s == null) return null;
@@ -124,7 +141,7 @@ function mapTransaction(node: Record<string, unknown>, isDerivative: boolean): P
   return {
     securityTitle: val(node.securityTitle),
     isDerivative,
-    transactionDate: val(node.transactionDate),
+    transactionDate: dateVal(node.transactionDate),
     transactionCode: val(coding.transactionCode),
     shares: num(amounts.transactionShares),
     pricePerShare: num(amounts.transactionPricePerShare),
@@ -169,7 +186,7 @@ export function parseForm4Xml(xml: string): ParsedForm4 {
     isDirector: bool01(rel.isDirector),
     isOfficer: bool01(rel.isOfficer),
     isTenPct: bool01(rel.isTenPercentOwner),
-    periodOfReport: val(root.periodOfReport),
+    periodOfReport: dateVal(root.periodOfReport),
     transactions,
   };
 }

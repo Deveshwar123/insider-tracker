@@ -7,6 +7,69 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 
 ---
 
+## IT-11 — Every filing was downloaded once per party
+
+| | |
+|---|---|
+| **Status** | CLOSED |
+| **Opened** | 2026-07-23 |
+| **Closed** | 2026-07-23 |
+| **Severity** | Medium — 2-3x wasted work and 2-3x the load on SEC |
+| **Files** | `worker/src/ingest/run.ts` |
+
+**Symptom** — a day's log read `rows: 560 … already: 267`, i.e. 560 index rows
+resolving to 267 actual filings.
+
+**Root cause**
+
+EDGAR's daily master index lists one row per **party**: once for the issuer and
+once for each reporting owner. The sweep treated every row as a filing, so a
+filing with an issuer and two owners was fetched, parsed and upserted three
+times. The upserts made it harmless — `accession_no` is unique — but it tripled
+the downloads, and a backfill took that much longer.
+
+(The live-feed path already deduped; the daily-index path never did.)
+
+**Fix** — entries are deduped by accession number before the DB check. Measured
+on 2026-07-22: 560 rows → 267 filings, a 2.1x reduction. `filings_seen` now
+counts filings rather than index rows.
+
+---
+
+## IT-10 — Filings with a timezone on the date were silently dropped
+
+| | |
+|---|---|
+| **Status** | CLOSED |
+| **Opened** | 2026-07-23 |
+| **Closed** | 2026-07-23 |
+| **Severity** | High — silent, permanent data loss |
+| **Files** | `worker/src/edgar/form4-parser.ts` |
+
+**Symptom** (from a backfill log)
+
+```
+Failed to ingest filing (skipping)
+  accession: 0001640334-26-001225
+  error: saveFiling upsert failed:
+         invalid input syntax for type date: "2026-07-17-05:00"
+```
+
+**Root cause**
+
+`periodOfReport` and `transactionDate` were passed through as raw strings. Most
+filers write a plain `2026-07-17`, but some emit `2026-07-17-05:00` — a date with
+a UTC offset appended — and others `2026-07-17T00:00:00`. Postgres rejects those
+for a `date` column, which failed the whole upsert, so the filing was counted as
+an error and **never stored**. Nothing retried it.
+
+**Fix** — a `dateVal()` accessor extracts the leading `YYYY-MM-DD` and returns
+null for anything that isn't a date. Verified against the filing above:
+`"2026-07-17-05:00"` → `"2026-07-17"`. These filings are picked up on the next
+sweep, since a filing that was never written is not deduped away.
+
+---
+
 ## IT-9 — The publishable key can write to the database
 
 | | |
