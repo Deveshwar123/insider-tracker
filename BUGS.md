@@ -16,6 +16,7 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 | **Closed** | 2026-07-23 |
 | **Severity** | Critical — nothing could be built or deployed |
 | **Files** | `web/lib/prisma.ts` |
+| **Fixed in** | `9b2fd85` |
 
 **Actual:** `Type error: Cannot find module './generated/prisma'` — the build
 stopped before producing anything.
@@ -44,6 +45,7 @@ of the table shapes.
 | **Closed** | 2026-07-23 |
 | **Severity** | High — a red X on every push, and no CI actually checking the build |
 | **Files** | `.github/workflows/nextjs.yml` → `.github/workflows/ci.yml` |
+| **Fixed in** | `9b2fd85` |
 
 **Actual:** every run failed at step 3, "Detect package manager".
 
@@ -75,6 +77,7 @@ typechecks `worker/` on every push and PR.
 | **Closed** | 2026-07-23 |
 | **Severity** | High — unbounded request loop against SEC, from the user's browser |
 | **Files** | `web/app/components/RefreshButton.tsx` |
+| **Fixed in** | `9b2fd85` |
 
 **Steps to reproduce:** click Refresh on a day where more than 50 filings fail to
 parse (a malformed batch, or an EDGAR block mid-run).
@@ -103,6 +106,7 @@ the status line rather than looking like success.
 | **Closed** | 2026-07-23 |
 | **Severity** | Medium — a broken ingest is indistinguishable from a quiet day |
 | **Files** | `web/lib/ingest.ts`, `web/app/components/RefreshButton.tsx` |
+| **Fixed in** | `9b2fd85` |
 
 **Root cause**
 
@@ -129,6 +133,7 @@ insider upsert errors are now thrown with the CIK in the message.
 | **Closed** | 2026-07-23 |
 | **Severity** | Low — cosmetic, but reads as a hung page |
 | **Files** | `web/app/components/FilingsExplorer.tsx` |
+| **Fixed in** | `9b2fd85` |
 
 **Root cause**
 
@@ -152,6 +157,7 @@ being parsed as JSON.
 | **Closed** | 2026-07-23 |
 | **Severity** | Medium — blocks CI and any fresh clone |
 | **Files** | `web/lib/supabase.ts`, `web/lib/queries.ts` |
+| **Fixed in** | `9b2fd85` |
 
 **Root cause**
 
