@@ -16,7 +16,7 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 | **Closed** | 2026-11-07 |
 | **Severity** | Low — dev tooling only; CI never ran it |
 | **Files** | `web/package.json` |
-| **Fixed in** | (this commit) |
+| **Fixed in** | `1b2e2aa` |
 
 **Steps to reproduce:** fresh clone, `cd web && npm ci && npm run lint`.
 
