@@ -9,7 +9,9 @@ name: Ingest SEC Form 4
 #                   completeness backstop for anything a poll window missed.
 #
 # Note: GitHub disables scheduled workflows on a repo with no commits for 60
-# days. If polling ever goes quiet, re-enable it in the Actions tab.
+# days (that stopped ingestion on 2026-09-21, IT-12). The `keepalive` job below
+# re-enables this workflow through the API every night, which resets that clock
+# without a commit. If polling still goes quiet, re-enable it in the Actions tab.
 on:
   schedule:
     - cron: "*/15 * * * 1-5"   # live poll
@@ -63,3 +65,16 @@ jobs:
       - name: Full daily-index sweep
         if: github.event.schedule == '0 23 * * 1-5' || github.event.inputs.mode == 'days'
         run: npx tsx src/index.ts --days ${{ github.event.inputs.days || '1' }}
+
+  # Runs with the nightly sweep: the same API call as "Enable workflow" in the
+  # Actions tab, so the 60-day inactivity timer never runs out (IT-12).
+  keepalive:
+    if: github.event.schedule == '0 23 * * 1-5'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Keep this schedule from being auto-disabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/ingest.yml/enable"

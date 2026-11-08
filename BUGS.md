@@ -7,6 +7,62 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 
 ---
 
+## IT-13 — `npm run lint` stopped at an interactive prompt
+
+| | |
+|---|---|
+| **Status** | CLOSED |
+| **Opened** | 2026-11-07 |
+| **Closed** | 2026-11-07 |
+| **Severity** | Low — dev tooling only; CI never ran it |
+| **Files** | `web/package.json` |
+| **Fixed in** | (this commit) |
+
+**Steps to reproduce:** fresh clone, `cd web && npm ci && npm run lint`.
+
+**Root cause** — the script was create-next-app's `next lint`, but the repo has no
+ESLint config and no `eslint` / `eslint-config-next` dependency, so Next.js asks
+"How would you like to configure ESLint?" and waits for an answer forever (and
+would install packages if one were given).
+
+**Fix** — `lint` is now `tsc --noEmit`, a full type-check of the app, matching
+the worker's `typecheck`. Verified: exits 0 on a fresh clone.
+
+---
+
+## IT-12 — Live ingestion stopped on 2026-09-21
+
+| | |
+|---|---|
+| **Status** | OPEN — waiting on the owner to restore the Supabase project |
+| **Opened** | 2026-11-07 |
+| **Severity** | High — no new trades since 2026-09-21 |
+| **Files** | `.github/workflows/ingest.yml` |
+
+**Symptom** — the last "Ingest SEC Form 4" run is 2026-09-21; the Actions tab
+shows the workflow as `disabled_inactivity`. The Supabase host
+`splybkylypurbmlhhqkg.supabase.co` now answers NXDOMAIN, which is what a paused
+free-tier project looks like.
+
+**Root cause** — two free-tier limits in a row:
+1. GitHub disables scheduled workflows after 60 days without a commit. The last
+   commit was 2026-07-23, so the schedule stopped on 2026-09-21.
+2. With nothing writing to it, Supabase paused the free project after a week of
+   inactivity.
+
+**Fix so far** — a `keepalive` job in `ingest.yml` re-enables the workflow through
+the API every night, so rule 1 can't stop it again. The workflow is deliberately
+left disabled for now: with the database paused, every 15-minute run would fail
+and email the owner.
+
+**Still to do** — (1) owner: Supabase dashboard → the project → **Restore**;
+(2) re-enable the workflow (`gh workflow enable ingest.yml`); (3) backfill the gap
+with Actions → Ingest SEC Form 4 → Run workflow, mode `days` (or locally:
+`cd worker && npm run ingest:days 50`); (4) close this ticket; (5) re-check
+issue #1 (refresh bar), which predates the IT-3 / IT-4 rewrite of that button.
+
+---
+
 ## IT-11 — Every filing was downloaded once per party
 
 | | |
@@ -361,4 +417,5 @@ credential-free (which `ci.yml` enforces by building with no env set).
 
 ## Open tickets
 
-_None._
+- **IT-12** — live ingestion stopped; needs the Supabase project restored.
+- **IT-9** — the publishable key can write; needs `0002_read_only_rls.sql` run on the live project.
