@@ -105,11 +105,18 @@ file, copy `.env.local.example` to `.env.local` and fill it in instead.
   Directory** to `web`, and add the two `NEXT_PUBLIC_*` env vars. Deploy.
 - **Running it locally is the recommended path.** The dashboard needs no server
   of its own — it talks straight to your Supabase project from the browser.
-- **Ingestion:** Also wired as GitHub Actions cron
+- **Ingestion:** runs on GitHub Actions
   ([`.github/workflows/ingest.yml`](.github/workflows/ingest.yml)). Add three repo
   secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SEC_USER_AGENT`. It polls
-  the live feed every 15 minutes on weekdays and does a full daily sweep at 23:00
-  UTC; both can also be run by hand from the Actions tab.
+  the live feed every 15 minutes on weekdays and sweeps the last 4 completed days
+  every night; both can also be run by hand from the Actions tab.
+- **On-time triggers (recommended):** GitHub's own cron is best-effort and runs
+  far fewer polls than asked for on a quiet repo (here ~7 a day instead of 96).
+  [`supabase/migrations/0003_dispatch_ingest_cron.sql`](supabase/migrations/0003_dispatch_ingest_cron.sql)
+  makes Supabase start the workflow instead (pg_cron → workflow_dispatch). It needs
+  a fine-grained GitHub token limited to this repo with **Actions: Read and write**,
+  stored in Supabase Vault as `github_dispatch_token`; the file's header has the
+  steps. GitHub's schedules stay as a backup.
 - **CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds `web/` and
   typechecks `worker/` on every push. The build deliberately runs with **no**
   Supabase credentials — needing them at build time is a bug.
@@ -129,8 +136,10 @@ Two paths into the same pipeline:
   latest filings, so a trade lands in the DB minutes after it is published. The
   feed lists one entry per *party* (issuer + each reporting owner), so entries are
   deduped by accession number before anything is fetched.
-- **Sweep (`--days N`, nightly):** walks the full `master.<date>.idx` daily index
-  for the last N **completed** days, ending yesterday. Not today: EDGAR publishes
+- **Sweep (`--days N`, nightly, N = 4):** walks the full `master.<date>.idx` daily index
+  for the last N **completed** days, ending yesterday. Four, so a Monday sweep
+  reaches back to Friday and a sweep that starts late still has published days
+  to read. Not today: EDGAR publishes
   a day's index hours after that day closes, and a missing index returns `403`
   (S3 not-found), not `404`. Asking for today's index is how this job silently
   ingested nothing for a month. The feed covers today; this is the completeness

@@ -7,6 +7,65 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 
 ---
 
+## IT-15 — Every nightly sweep failed, and Fridays were never swept
+
+| | |
+|---|---|
+| **Status** | IN PROGRESS — fix pushed; closes after the first nightly sweep passes |
+| **Opened** | 2026-11-09 |
+| **Severity** | Medium — the completeness backstop never ran; a failure email every night |
+| **Files** | `.github/workflows/ingest.yml` |
+
+**Symptom** — 21 of the 25 failed scheduled runs from 2026-07-27 to 2026-09-19 are
+the nightly sweep: every Monday sweep (5, at 23:10–23:57 UTC) and every sweep
+GitHub started after midnight UTC (16, every weeknight from 2026-09-01). The other
+4 are daytime polls. Example, run 35168564586 (Thu 2026-09-17 00:56 UTC):
+`No daily index published for date {"date":"20260916","status":403}` →
+`Worker failed: No daily index was available for any of the last 1 day(s)`.
+
+**Root cause** — the sweep ran `--days 1`, which means "yesterday only".
+1. GitHub started the 23:00 cron 1½–2 h late, after midnight UTC. "Yesterday" was
+   then the day that had *just* closed, whose index EDGAR hadn't published yet
+   (403), and a run that sees no index at all is a failure by design (IT-7).
+2. Even on time, Monday's sweep asks only for Sunday (never an index → fails),
+   and no sweep runs on Saturday, so Friday's index was never swept.
+
+**Fix** — sweep the last **4** completed days. Monday reaches back to Friday, a late
+start still has published days to read, and days already stored are deduped (one
+index fetch each). The workflow_dispatch `days` default is 4 too, and its stale
+"1 = today only" description is corrected.
+
+---
+
+## IT-14 — Scheduled ingestion ran a fraction of the time
+
+| | |
+|---|---|
+| **Status** | IN PROGRESS — needs the owner's GitHub token in Supabase Vault |
+| **Opened** | 2026-11-09 |
+| **Severity** | Medium — new trades showed up hours late |
+| **Files** | `.github/workflows/ingest.yml`, `supabase/migrations/0003_dispatch_ingest_cron.sql` |
+
+**Symptom** — the "every 15 minutes" poll (96 a weekday) actually ran 33–38 times
+a day until 2026-08-26, then 3–8 a day from 2026-08-27 (median gap between runs
+almost an hour while active, hours once quiet). On 2026-11-09 it ran twice in 16 h.
+
+**Root cause** — GitHub's `schedule` event is best-effort: runs are delayed or
+dropped under load (worst at the top of the hour), and a repo with no recent
+commits is deprioritized further. The drop on 2026-08-27 is about 5 weeks after
+the last commit (2026-07-23). Nothing in the repo can make GitHub's cron reliable.
+
+**Fix** — Supabase starts the workflow instead: `0003_dispatch_ingest_cron.sql`
+adds pg_cron jobs (every 15 min weekdays, sweep at 23:10 UTC) that call the
+workflow_dispatch API through pg_net, using a fine-grained token (this repo only,
+Actions: read/write) kept in Supabase Vault. The function lives in a `private`
+schema with EXECUTE revoked, so the publishable key can't call it (see IT-9).
+GitHub's schedules stay as a backup, moved to minutes 7/22/37/52 and 23:17, away
+from the top of the hour, as GitHub's docs advise. The keepalive job now also runs
+on a dispatched sweep, since a disabled workflow can't be dispatched.
+
+---
+
 ## IT-13 — `npm run lint` stopped at an interactive prompt
 
 | | |
@@ -430,4 +489,6 @@ credential-free (which `ci.yml` enforces by building with no env set).
 
 ## Open tickets
 
+- **IT-14** — scheduled ingestion unreliable; needs the GitHub token in Supabase Vault + migration 0003.
+- **IT-15** — nightly sweep failures; fix pushed, verify after the first sweep.
 - **IT-9** — the publishable key can write; needs `0002_read_only_rls.sql` run on the live project.

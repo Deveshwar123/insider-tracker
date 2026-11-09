@@ -1,21 +1,30 @@
 name: Ingest SEC Form 4
 
-# Two schedules, one worker:
+# Two jobs, one worker:
 #
 #   * live poll   — every 15 minutes on weekdays, reads EDGAR's "latest filings"
 #                   feed so trades land in the DB minutes after they publish.
-#   * daily sweep — 23:00 UTC weekdays, walks the full daily master index. The
-#                   feed only reaches back ~100 entries per page, so this is the
-#                   completeness backstop for anything a poll window missed.
+#   * daily sweep — nightly on weekdays, walks the full daily master index for the
+#                   last 4 completed days. The feed only reaches back ~100 entries
+#                   per page, so this is the completeness backstop for anything a
+#                   poll window missed.
+#
+# Who starts them (IT-14): GitHub's own `schedule` is best-effort. On this repo it
+# fired ~37 of 96 polls a day while the repo was active and ~7 a day once it went
+# quiet, so the real trigger is Supabase: pg_cron calls this workflow's
+# workflow_dispatch API every 15 minutes and at 23:10 UTC
+# (supabase/migrations/0003_dispatch_ingest_cron.sql). The schedules below stay as
+# a backup, off the top of the hour where GitHub's load (and dropped runs) peaks.
 #
 # Note: GitHub disables scheduled workflows on a repo with no commits for 60
-# days (that stopped ingestion on 2026-09-21, IT-12). The `keepalive` job below
-# re-enables this workflow through the API every night, which resets that clock
-# without a commit. If polling still goes quiet, re-enable it in the Actions tab.
+# days (that stopped ingestion on 2026-09-21, IT-12), and a disabled workflow
+# can't be dispatched either. The `keepalive` job below re-enables this workflow
+# through the API with every nightly sweep, which resets that clock without a
+# commit. If polling still goes quiet, re-enable it in the Actions tab.
 on:
   schedule:
-    - cron: "*/15 * * * 1-5"   # live poll
-    - cron: "0 23 * * 1-5"     # nightly full-day sweep
+    - cron: "7,22,37,52 * * * 1-5"   # live poll (backup trigger)
+    - cron: "17 23 * * 1-5"          # nightly sweep (backup trigger)
   workflow_dispatch:
     inputs:
       mode:
@@ -25,9 +34,9 @@ on:
         type: choice
         options: ["recent", "days"]
       days:
-        description: "For mode=days: how many calendar days to ingest (1 = today only)"
+        description: "For mode=days: how many completed days to sweep, ending yesterday (4 covers a weekend)"
         required: false
-        default: "1"
+        default: "4"
 
 # Never let two ingests race: they would fight over the same accession numbers.
 concurrency:
@@ -57,19 +66,24 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      # The 23:00 cron does the full sweep; every other trigger polls the feed.
+      # The nightly cron does the full sweep; every other trigger polls the feed.
       - name: Live feed poll
-        if: github.event.schedule == '*/15 * * * 1-5' || github.event.inputs.mode == 'recent'
+        if: github.event.schedule == '7,22,37,52 * * * 1-5' || github.event.inputs.mode == 'recent'
         run: npx tsx src/index.ts --recent --pages 3
 
+      # 4 days, not 1 (IT-15): with 1, a Monday sweep asked only for Sunday (no
+      # index, so the run failed), Friday was never swept, and a sweep GitHub
+      # started after midnight asked for a day EDGAR hadn't published yet.
+      # Days already stored are deduped, so the overlap costs one index fetch each.
       - name: Full daily-index sweep
-        if: github.event.schedule == '0 23 * * 1-5' || github.event.inputs.mode == 'days'
-        run: npx tsx src/index.ts --days ${{ github.event.inputs.days || '1' }}
+        if: github.event.schedule == '17 23 * * 1-5' || github.event.inputs.mode == 'days'
+        run: npx tsx src/index.ts --days ${{ github.event.inputs.days || '4' }}
 
-  # Runs with the nightly sweep: the same API call as "Enable workflow" in the
-  # Actions tab, so the 60-day inactivity timer never runs out (IT-12).
+  # Runs with the nightly sweep (scheduled or dispatched): the same API call as
+  # "Enable workflow" in the Actions tab, so the 60-day inactivity timer never
+  # runs out (IT-12).
   keepalive:
-    if: github.event.schedule == '0 23 * * 1-5'
+    if: github.event.schedule == '17 23 * * 1-5' || github.event.inputs.mode == 'days'
     runs-on: ubuntu-latest
     permissions:
       actions: write
