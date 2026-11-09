@@ -34,8 +34,9 @@ the worker's `typecheck`. Verified: exits 0 on a fresh clone.
 
 | | |
 |---|---|
-| **Status** | OPEN — waiting on the owner to restore the Supabase project |
+| **Status** | CLOSED |
 | **Opened** | 2026-11-07 |
+| **Closed** | 2026-11-09 |
 | **Severity** | High — no new trades since 2026-09-21 |
 | **Files** | `.github/workflows/ingest.yml` |
 
@@ -55,11 +56,23 @@ the API every night, so rule 1 can't stop it again. The workflow is deliberately
 left disabled for now: with the database paused, every 15-minute run would fail
 and email the owner.
 
-**Still to do** — (1) owner: Supabase dashboard → the project → **Restore**;
-(2) re-enable the workflow (`gh workflow enable ingest.yml`); (3) backfill the gap
-with Actions → Ingest SEC Form 4 → Run workflow, mode `days` (or locally:
-`cd worker && npm run ingest:days 50`); (4) close this ticket; (5) re-check
-issue #1 (refresh bar), which predates the IT-3 / IT-4 rewrite of that button.
+**Resolution (2026-11-09)**
+1. The owner restored the Supabase project ("GovTrades") from the dashboard.
+   No data was lost in the pause: 202,951 filings and 469,009 transactions
+   were still there, and the last `ingestion_runs` row was 2026-09-21 15:54 UTC.
+2. The workflow was already `active` again. Its two scheduled runs on 2026-11-09
+   (05:50 and 15:53 UTC) failed only because the database was still paused.
+3. Verified with a manual run (`gh workflow run ingest.yml -f mode=recent`,
+   run 42657728793): `Live poll complete {"seen":21,"new":21,"errors":0}`.
+4. Gap backfill started locally at 16:38 UTC: `cd worker && npx tsx src/index.ts
+   --days 50` (2026-09-20 → 2026-11-08, newest first). It runs at about 55
+   filings a minute, about 5 h for the whole gap. Weekend days log
+   `No daily index published … 403`, which is expected. It dedupes by accession,
+   so if it gets interrupted, re-running the same command picks up where it
+   left off.
+5. Issue #1 (refresh bar) re-checked: that bar was removed in `bfe4e0f`. Its
+   replacement, the 60 s "Live" re-check, was verified against the restored
+   database: a second query fired on its own, and the badge read "updated 10:43 AM".
 
 ---
 
@@ -417,5 +430,4 @@ credential-free (which `ci.yml` enforces by building with no env set).
 
 ## Open tickets
 
-- **IT-12** — live ingestion stopped; needs the Supabase project restored.
 - **IT-9** — the publishable key can write; needs `0002_read_only_rls.sql` run on the live project.
