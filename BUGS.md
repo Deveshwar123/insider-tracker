@@ -11,8 +11,10 @@ Status: `OPEN` · `IN PROGRESS` · `CLOSED`
 
 | | |
 |---|---|
-| **Status** | IN PROGRESS — fix pushed; closes after the first nightly sweep passes |
+| **Status** | CLOSED |
 | **Opened** | 2026-11-09 |
+| **Closed** | 2026-11-09 |
+| **Fixed in** | `424a5c2` |
 | **Severity** | Medium — the completeness backstop never ran; a failure email every night |
 | **Files** | `.github/workflows/ingest.yml` |
 
@@ -35,14 +37,22 @@ start still has published days to read, and days already stored are deduped (one
 index fetch each). The workflow_dispatch `days` default is 4 too, and its stale
 "1 = today only" description is corrected.
 
+**Verified** — sweep dispatched through the new path (run 42661530601, Mon
+2026-11-09 17:07 UTC, `--days 4`): 11-08 and 11-07 logged "No daily index
+published … 403" without failing the run, 11-06/11-05 deduped (958 seen, 0 new),
+`Ingestion complete {"days":4,"seen":958,"new":0,"errors":0}`, and the keepalive
+job ran on the dispatched sweep.
+
 ---
 
 ## IT-14 — Scheduled ingestion ran a fraction of the time
 
 | | |
 |---|---|
-| **Status** | IN PROGRESS — needs the owner's GitHub token in Supabase Vault |
+| **Status** | CLOSED |
 | **Opened** | 2026-11-09 |
+| **Closed** | 2026-11-09 |
+| **Fixed in** | `424a5c2` + migration 0003 applied on the live project |
 | **Severity** | Medium — new trades showed up hours late |
 | **Files** | `.github/workflows/ingest.yml`, `supabase/migrations/0003_dispatch_ingest_cron.sql` |
 
@@ -63,6 +73,16 @@ schema with EXECUTE revoked, so the publishable key can't call it (see IT-9).
 GitHub's schedules stay as a backup, moved to minutes 7/22/37/52 and 23:17, away
 from the top of the hour, as GitHub's docs advise. The keepalive job now also runs
 on a dispatched sweep, since a disabled workflow can't be dispatched.
+
+**Verified (2026-11-09)** — owner created the token (expires 2027-11-09) and
+stored it in Vault; migration 0003 applied in the SQL editor (`cron.job`:
+`ingest-live-poll */15 * * * 1-5`, `ingest-nightly-sweep 10 23 * * 1-5`, both
+active). A manual `private.dispatch_ingest('recent')` got HTTP 204 from GitHub and
+started run 42661366457 (success). pg_cron then started a run at every quarter
+hour, 17:15:01 → 19:30:01 UTC (10 runs; the 18:15 one failed during GitHub's
+Actions incident of 18:12 UTC and never got a job, and the rest succeeded). The
+publishable key can't reach the function: `POST /rest/v1/rpc/dispatch_ingest` →
+404, with `Content-Profile: private` → 406 "Invalid schema: private".
 
 ---
 
@@ -490,6 +510,4 @@ credential-free (which `ci.yml` enforces by building with no env set).
 
 ## Open tickets
 
-- **IT-14** — scheduled ingestion unreliable; needs the GitHub token in Supabase Vault + migration 0003.
-- **IT-15** — nightly sweep failures; fix pushed, verify after the first sweep.
 - **IT-9** — the publishable key can write; needs `0002_read_only_rls.sql` run on the live project.
