@@ -117,6 +117,9 @@ file, copy `.env.local.example` to `.env.local` and fill it in instead.
   a fine-grained GitHub token limited to this repo with **Actions: Read and write**,
   stored in Supabase Vault as `github_dispatch_token`; the file's header has the
   steps. GitHub's schedules stay as a backup.
+- **Catching up after an outage:** Actions → **Backfill SEC Form 4** → Run workflow
+  with the number of days to sweep ([`backfill.yml`](.github/workflows/backfill.yml),
+  up to 5h40m per run; re-run it if it times out, already-stored filings are skipped).
 - **CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds `web/` and
   typechecks `worker/` on every push. The build deliberately runs with **no**
   Supabase credentials — needing them at build time is a bug.

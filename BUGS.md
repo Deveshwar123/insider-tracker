@@ -123,12 +123,13 @@ and email the owner.
    (05:50 and 15:53 UTC) failed only because the database was still paused.
 3. Verified with a manual run (`gh workflow run ingest.yml -f mode=recent`,
    run 42657728793): `Live poll complete {"seen":21,"new":21,"errors":0}`.
-4. Gap backfill started locally at 16:38 UTC: `cd worker && npx tsx src/index.ts
-   --days 50` (2026-09-20 → 2026-11-08, newest first). It runs at about 55
-   filings a minute, about 5 h for the whole gap. Weekend days log
-   `No daily index published … 403`, which is expected. It dedupes by accession,
-   so if it gets interrupted, re-running the same command picks up where it
-   left off.
+4. Gap backfill: started locally at 16:38 UTC (`--days 50`, newest first, about
+   55 filings a minute). It finished 2026-11-06 → 11-04 and part of 11-03, then
+   stalled when the laptop slept with the lid closed. It was moved to GitHub
+   Actions: the new `backfill.yml` (workflow_dispatch, `days` input, 5h40m
+   timeout, its own concurrency group so live polls keep running). It dedupes by
+   accession, so a re-run picks up where the last one stopped. Weekend days log
+   `No daily index published … 403`, which is expected.
 5. Issue #1 (refresh bar) re-checked: that bar was removed in `bfe4e0f`. Its
    replacement, the 60 s "Live" re-check, was verified against the restored
    database: a second query fired on its own, and the badge read "updated 10:43 AM".
